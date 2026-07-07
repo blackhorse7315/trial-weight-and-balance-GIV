@@ -1240,21 +1240,32 @@
             try {
                 if (!appExpiryDate) throw new Error("Could not get expiry date");
 
-                document.getElementById('expiry-date-display').textContent = `This Application is valid until ${new Date(appExpiryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+                const displayElement = document.getElementById('expiry-date-display');
+                displayElement.textContent = `This Application is valid until ${new Date(appExpiryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+                
                 const expiryDate = new Date(appExpiryDate);
                 expiryDate.setDate(expiryDate.getDate() + 1);
                 const currentDate = new Date();
                 const timeDiff = expiryDate.getTime() - currentDate.getTime();
                 const daysLeft = Math.floor(timeDiff / (1000 * 3600 * 24));
                 const countdownElement = document.getElementById('expiry-countdown');
-                if (daysLeft >= 0) {
-                    countdownElement.textContent = `Remaining validity: ${daysLeft} days`;
-                    countdownElement.classList.remove('text-red-400');
-                    countdownElement.classList.add('text-amber-400');
-                } else {
+                
+                // Clear old color classes
+                displayElement.classList.remove('text-red-400', 'text-amber-400', 'text-green-500', 'text-orange-500', 'text-red-500', 'font-bold');
+                countdownElement.classList.remove('text-red-400', 'text-amber-400', 'text-green-500', 'text-orange-500', 'text-red-500', 'font-bold');
+
+                if (daysLeft <= 0) {
                     countdownElement.textContent = 'Application Expired';
-                    countdownElement.classList.remove('text-amber-400');
-                    countdownElement.classList.add('text-red-400');
+                    displayElement.classList.add('text-red-500', 'font-bold');
+                    countdownElement.classList.add('text-red-500', 'font-bold');
+                } else if (daysLeft <= 20) {
+                    countdownElement.textContent = `Remaining validity: ${daysLeft} days`;
+                    displayElement.classList.add('text-orange-500', 'font-bold');
+                    countdownElement.classList.add('text-orange-500', 'font-bold');
+                } else {
+                    countdownElement.textContent = `Remaining validity: ${daysLeft} days`;
+                    displayElement.classList.add('text-green-500', 'font-bold');
+                    countdownElement.classList.add('text-green-500', 'font-bold');
                 }
             } catch (error) {
                  document.getElementById('expiry-date-display').textContent = 'Could not retrieve expiry date.';
