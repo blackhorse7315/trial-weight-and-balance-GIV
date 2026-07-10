@@ -945,7 +945,7 @@
         const DEFAULT_EXPIRY_DATE = '2025-10-25';
 
         // --- GOOGLE APPS SCRIPT URL ---
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzYvDBd0HGBC-kAlvHQIR3_98Fc-F8xvTPZC-HUKTvBGqpWRGIE3R9cOtgUihRIiK7XBA/exec'; 
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAs6cE1sfU4wUxV97CvpRtKo5d9XQ77BWftBy2QEjAE-ikUYGXerYsiNg0oFLIdSWdzg/exec'; 
 
         // --- PAGE ELEMENTS ---
         const loginPage = document.getElementById('login-page');
@@ -1739,26 +1739,44 @@
 
         async function loadHistory() {
             const container = document.getElementById('history-content');
-            container.innerHTML = '<p class="text-center text-gray-400 mt-10">Menarik data dari database...</p>';
-            
+            container.innerHTML = '<p class="text-center text-gray-400 mt-10">Memuat data...</p>';
             try {
-                const response = await fetch(`${SCRIPT_URL}?action=fetchHistory`);
-                const result = await response.json();
-
-                if (result.status === 'success') {
+                // Tambahkan redirect: 'follow' karena respon Google Apps Script sering berupa pengalihan
+                const res = await fetch(SCRIPT_URL + '?action=fetchHistory', {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
+                
+                if(!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+                
+                const result = await res.json();
+                if(result.status === 'success') {
                     currentHistoryData = result.data || [];
                     renderHistoryGrouped();
                 } else {
-                    container.innerHTML = `<p class="text-center text-red-400 mt-10">Gagal menarik data: ${result.message}</p>`;
+                    throw new Error(result.message || 'Gagal memuat dari server Google');
                 }
             } catch (err) {
-                container.innerHTML = '<p class="text-center text-red-400 mt-10">Terjadi kesalahan koneksi.</p>';
+                console.error('Detail Error Load History:', err);
+                container.innerHTML = `
+                    <div class="text-center mt-10 px-4">
+                        <p class="text-red-400 font-semibold">Terjadi kesalahan koneksi.</p>
+                        <p class="text-xs text-red-300 mt-2">Detail: ${err.message}</p>
+                        <div class="mt-4 text-xs text-gray-400 text-left bg-gray-800 p-3 rounded-lg">
+                            <b>Cara Perbaikan:</b><br>
+                            1. Buka Google Sheet > Ekstensi > Apps Script.<br>
+                            2. Klik <b>Deploy</b> > <b>Manage Deployments</b> (Kelola Deployment).<br>
+                            3. Edit (ikon pensil) deployment yang aktif.<br>
+                            4. Pada dropdown <b>Version</b>, pilih <b>New version</b> (Versi Baru).<br>
+                            5. Klik <b>Deploy</b>, lalu refresh kembali aplikasi ini.
+                        </div>
+                    </div>
+                `;
             }
         }
 
         function renderHistoryGrouped() {
             const container = document.getElementById('history-content');
-            container.innerHTML = '';
             
             if (currentHistoryData.length === 0) {
                 container.innerHTML = '<p class="text-center text-gray-400 mt-10">Belum ada data penerbangan tersimpan.</p>';
@@ -1778,6 +1796,7 @@
             let currentYear = '';
             let currentMonth = '';
             let currentDate = '';
+            let htmlContent = '';
 
             currentHistoryData.forEach(item => {
                 const d = item.rowData || [];
@@ -1793,126 +1812,137 @@
                 const elevatorTrim = d[58] || '-';
 
                 let dateObj = parseGBDate(ts);
-                if (isNaN(dateObj.getTime())) dateObj = new Date();
                 
-                const y = dateObj.getFullYear().toString();
-                const m = dateObj.toLocaleString('en-US', { month: 'long' });
-                const dt = dateObj.toLocaleDateString('en-GB');
+                // Mencegah masalah timezone (UTC) dan mengubah ISO text menjadi format lokal yang mudah dibaca
+                let displayFlightDate = flightDateStr;
+                if (flightDateStr && flightDateStr !== '-') {
+                    const fd = new Date(flightDateStr);
+                    if (!isNaN(fd.getTime())) {
+                        displayFlightDate = fd.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+                    }
+                }
 
-                if (y !== currentYear) {
-                    currentYear = y;
-                    container.innerHTML += `<h3 class="text-2xl font-bold text-amber-400 mt-6 mb-2 border-b border-gray-700 pb-1">${y}</h3>`;
+                const year = dateObj.getFullYear();
+                const monthName = dateObj.toLocaleString('en-US', { month: 'long' });
+                const dateStrForSort = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+                if (year !== currentYear) {
+                    currentYear = year;
+                    htmlContent += `<h3 class="text-xl font-bold text-amber-400 mt-6 mb-2 border-b-2 border-gray-700 pb-1">${currentYear}</h3>`;
                 }
-                if (m !== currentMonth) {
-                    currentMonth = m;
-                    container.innerHTML += `<h4 class="text-xl font-semibold text-indigo-300 ml-2 mt-4 mb-2">${m}</h4>`;
+
+                if (monthName !== currentMonth) {
+                    currentMonth = monthName;
+                    htmlContent += `<h4 class="text-lg font-semibold text-gray-200 mt-4 mb-2">${currentMonth}</h4>`;
                 }
-                if (dt !== currentDate) {
-                    currentDate = dt;
-                    container.innerHTML += `<div class="ml-4 mt-3 mb-3"><span class="bg-gray-700 text-gray-200 px-3 py-1 rounded text-sm font-medium shadow-sm border border-gray-600">${dt}</span></div>`;
+
+                if (dateStrForSort !== currentDate) {
+                    currentDate = dateStrForSort;
+                    htmlContent += `<div class="ml-4 mt-3 mb-3"><span class="bg-gray-700 text-gray-200 px-3 py-1 rounded text-sm font-medium shadow-sm border border-gray-600">${displayFlightDate}</span></div>`;
                 }
 
                 // Fungsi pembantu untuk formatting isi data
                 const val = (idx, unit='') => (d[idx] !== undefined && d[idx] !== '') ? `${d[idx]} ${unit}`.trim() : '-';
 
-                container.innerHTML += `
+                htmlContent += `
                     <div class="bg-gray-800 p-4 rounded-lg ml-4 sm:ml-8 mb-3 border border-gray-700 shadow-sm relative hover:border-gray-500 transition-colors">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
-                            <div>
-                                <p class="text-white font-bold text-lg flex items-center gap-2">
-                                    <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded">${routeFrom}</span> 
-                                    &rarr; 
-                                    <span class="bg-green-600 text-white text-xs px-2 py-0.5 rounded">${routeTo}</span>
-                                </p>
-                                <p class="text-xs text-gray-400 mt-1">${ts}</p>
+                            <div class="flex items-center text-gray-300 font-mono text-sm border border-gray-700 rounded px-2 py-1 bg-gray-800">
+                                <span class="font-bold text-amber-400 w-12 text-center">${routeFrom}</span>
+                                <span class="mx-2 text-gray-500">→</span>
+                                <span class="font-bold text-amber-400 w-12 text-center">${routeTo}</span>
                             </div>
-                            <div class="flex flex-wrap gap-2">
-                                <button onclick="loadFlightData(${item.row})" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs py-1 px-3 rounded transition-colors shadow flex items-center gap-1 border border-emerald-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                    Buka Detail & PDF
-                                </button>
-                                <button onclick="deleteHistory(${item.row})" class="bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-3 rounded transition-colors shadow">Hapus</button>
-                            </div>
-                        </div>
-                        
-                        <!-- Quick Summary -->
-                        <div class="grid grid-cols-2 sm:grid-cols-3 text-xs sm:text-sm text-gray-300 gap-y-2 gap-x-4 bg-gray-900 p-3 rounded">
-                            <div><span class="text-gray-500 block text-[10px] uppercase">Date</span> ${flightDateStr}</div>
-                            <div><span class="text-gray-500 block text-[10px] uppercase">PIC</span> ${picName}</div>
-                            <div><span class="text-gray-500 block text-[10px] uppercase">TOW</span> ${towLbs} lbs</div>
-                            <div><span class="text-gray-500 block text-[10px] uppercase">Trim</span> ${elevatorTrim}</div>
-                            <div><span class="text-gray-500 block text-[10px] uppercase">Copilot</span> ${copilotName}</div>
-                            <div><span class="text-gray-500 block text-[10px] uppercase">ZFW</span> ${zfwLbs} lbs</div>
-                            <div><span class="text-gray-500 block text-[10px] uppercase">Fuel Req</span> ${totalFuelRequired} lbs</div>
+                            <span class="text-xs text-gray-500 mt-2 sm:mt-0">${ts}</span>
                         </div>
 
-                        <button onclick="toggleDetails(${item.row})" class="text-indigo-400 hover:text-indigo-300 text-xs mt-3 font-medium flex items-center gap-1 w-full justify-center border-t border-gray-700 pt-2 transition-colors">
-                            <span id="toggle-text-${item.row}">Lihat Seluruh Data</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                        </button>
-
-                        <!-- Expanded Full Data -->
-                        <div id="details-${item.row}" class="hidden mt-2 pt-2 border-t border-gray-700">
-                            <h5 class="text-amber-400 font-semibold mb-2 text-sm">General & Crew</h5>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4 bg-gray-900/50 p-2 rounded">
-                                <div><span class="text-gray-500 block">Engineer:</span> ${val(6)}</div>
-                                <div><span class="text-gray-500 block">Cabin Svc:</span> ${val(7)}</div>
-                                <div><span class="text-gray-500 block">POB:</span> ${val(15)}</div>
-                                <div><span class="text-gray-500 block">Max Range:</span> ${val(27, 'nm')}</div>
+                        <div class="mt-3 relative">
+                            <!-- Action Buttons -->
+                            <div class="flex justify-end gap-2 mb-2">
+                                <button onclick="loadFlightData(${item.row})" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded shadow transition-colors">Buka Detail & PDF</button>
+                                <button onclick="deleteHistory(${item.row})" class="bg-red-600 hover:bg-red-500 text-white text-xs px-2 py-1 rounded shadow transition-colors">Hapus</button>
+                            </div>
+                            
+                            <!-- Quick Summary -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 text-xs sm:text-sm text-gray-300 gap-y-2 gap-x-4 bg-gray-900 p-3 rounded">
+                                <div><span class="text-gray-500 block text-[10px] uppercase">DATE</span> ${displayFlightDate}</div>
+                                <div><span class="text-gray-500 block text-[10px] uppercase">PIC</span> ${picName}</div>
+                                <div><span class="text-gray-500 block text-[10px] uppercase">TOW</span> ${towLbs} lbs</div>
+                                <div><span class="text-gray-500 block text-[10px] uppercase">TRIM</span> ${elevatorTrim}</div>
+                                <div><span class="text-gray-500 block text-[10px] uppercase">COPILOT</span> ${copilotName}</div>
+                                <div><span class="text-gray-500 block text-[10px] uppercase">ZFW</span> ${zfwLbs} lbs</div>
+                                <div><span class="text-gray-500 block text-[10px] uppercase">FUEL REQ</span> ${totalFuelRequired} lbs</div>
                             </div>
 
-                            <h5 class="text-amber-400 font-semibold mb-2 text-sm">Weights Limit & Result</h5>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4 bg-gray-900/50 p-2 rounded">
-                                <div><span class="text-gray-500 block">Ramp Wt:</span> ${val(8, 'lbs')}</div>
-                                <div><span class="text-gray-500 block">Max TOW:</span> ${val(9, 'lbs')}</div>
-                                <div><span class="text-gray-500 block">Empty Wt:</span> ${val(10, 'lbs')}</div>
-                                <div><span class="text-gray-500 block">Payload:</span> ${val(50, 'lbs')} / ${val(51, 'kg')}</div>
-                                <div><span class="text-gray-500 block">ZFW:</span> ${val(52, 'lbs')} (${val(53, '%MAC')})</div>
-                                <div><span class="text-gray-500 block">TOW:</span> ${val(54, 'lbs')} (${val(55, '%MAC')})</div>
-                                <div><span class="text-gray-500 block">LW:</span> ${val(56, 'lbs')} (${val(57, '%MAC')})</div>
-                            </div>
+                            <button onclick="toggleDetails(${item.row})" class="text-indigo-400 hover:text-indigo-300 text-xs mt-3 font-medium flex items-center gap-1 w-full justify-center border-t border-gray-700 pt-2 transition-colors">
+                                <span id="toggle-text-${item.row}">Lihat Seluruh Data</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                            </button>
 
-                            <h5 class="text-amber-400 font-semibold mb-2 text-sm">Flight & Fuel Details</h5>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4 bg-gray-900/50 p-2 rounded">
-                                <div><span class="text-gray-500 block">Trip Time:</span> ${val(19)}h ${val(20)}m</div>
-                                <div><span class="text-gray-500 block">Alt Time:</span> ${val(21)}h ${val(22)}m</div>
-                                <div><span class="text-gray-500 block">Altitude:</span> ${val(23, 'ft')}</div>
-                                <div><span class="text-gray-500 block">Airspeed:</span> ${val(24, 'kts')}</div>
-                                <div><span class="text-gray-500 block">Headwind:</span> ${val(25, 'kts')}</div>
-                                <div><span class="text-gray-500 block">FOB:</span> ${val(26, 'lbs')}</div>
-                                <div><span class="text-gray-500 block">Fuel Cons:</span> ${val(28, 'lbs/hr')}</div>
-                                <div><span class="text-gray-500 block">Trip Fuel:</span> ${val(29, 'lbs')}</div>
-                                <div><span class="text-gray-500 block">Alt Fuel:</span> ${val(30, 'lbs')}</div>
-                                <div><span class="text-gray-500 block">Res Fuel:</span> ${val(31, 'lbs')}</div>
-                                <div><span class="text-gray-500 block">Cont Fuel:</span> ${val(32, 'lbs')}</div>
-                                <div><span class="text-gray-500 block">Taxi Fuel:</span> ${val(33, 'lbs')}</div>
-                            </div>
+                            <!-- Expanded Full Data -->
+                            <div id="details-${item.row}" class="hidden mt-2 pt-2 border-t border-gray-700">
+                                <h5 class="text-amber-400 font-semibold mb-2 text-sm">General & Crew</h5>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4 bg-gray-900/50 p-2 rounded">
+                                    <div><span class="text-gray-500 block">Engineer:</span> ${val(6)}</div>
+                                    <div><span class="text-gray-500 block">Cabin Svc:</span> ${val(7)}</div>
+                                    <div><span class="text-gray-500 block">POB:</span> ${val(15)}</div>
+                                    <div><span class="text-gray-500 block">Max Range:</span> ${val(27, 'nm')}</div>
+                                </div>
 
-                            <h5 class="text-amber-400 font-semibold mb-2 text-sm">Payload Layout (kg)</h5>
-                            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs bg-gray-900/50 p-2 rounded">
-                                <div><span class="text-gray-500 block">Baggage:</span> ${val(16)}</div>
-                                <div><span class="text-gray-500 block">Ckpt Sto:</span> ${val(17)}</div>
-                                <div><span class="text-gray-500 block">Cab Sto:</span> ${val(18)}</div>
-                                <div><span class="text-gray-500 block">Galley:</span> ${val(35)}</div>
-                                <div><span class="text-gray-500 block">Aft Lav:</span> ${val(49)}</div>
-                                <div><span class="text-gray-500 block">Seat 1:</span> ${val(36)}</div>
-                                <div><span class="text-gray-500 block">Seat 2:</span> ${val(37)}</div>
-                                <div><span class="text-gray-500 block">Seat 3:</span> ${val(38)}</div>
-                                <div><span class="text-gray-500 block">Seat 4:</span> ${val(39)}</div>
-                                <div><span class="text-gray-500 block">Seat 5:</span> ${val(40)}</div>
-                                <div><span class="text-gray-500 block">Seat 6:</span> ${val(41)}</div>
-                                <div><span class="text-gray-500 block">Seat 7:</span> ${val(42)}</div>
-                                <div><span class="text-gray-500 block">Seat 8:</span> ${val(43)}</div>
-                                <div><span class="text-gray-500 block">Seat 9:</span> ${val(44)}</div>
-                                <div><span class="text-gray-500 block">Seat 10:</span> ${val(45)}</div>
-                                <div><span class="text-gray-500 block">Seat 11:</span> ${val(46)}</div>
-                                <div><span class="text-gray-500 block">Seat 12:</span> ${val(47)}</div>
-                                <div><span class="text-gray-500 block">Seat 13:</span> ${val(48)}</div>
+                                <h5 class="text-amber-400 font-semibold mb-2 text-sm">Weights Limit & Result</h5>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4 bg-gray-900/50 p-2 rounded">
+                                    <div><span class="text-gray-500 block">Ramp Wt:</span> ${val(8, 'lbs')}</div>
+                                    <div><span class="text-gray-500 block">Max TOW:</span> ${val(9, 'lbs')}</div>
+                                    <div><span class="text-gray-500 block">Empty Wt:</span> ${val(10, 'lbs')}</div>
+                                    <div><span class="text-gray-500 block">Payload:</span> ${val(50, 'lbs')} / ${val(51, 'kg')}</div>
+                                    <div><span class="text-gray-500 block">ZFW:</span> ${val(52, 'lbs')} (${val(53, '%MAC')})</div>
+                                    <div><span class="text-gray-500 block">TOW:</span> ${val(54, 'lbs')} (${val(55, '%MAC')})</div>
+                                    <div><span class="text-gray-500 block">LW:</span> ${val(56, 'lbs')} (${val(57, '%MAC')})</div>
+                                </div>
+
+                                <h5 class="text-amber-400 font-semibold mb-2 text-sm">Flight & Fuel Details</h5>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4 bg-gray-900/50 p-2 rounded">
+                                    <div><span class="text-gray-500 block">Trip Time:</span> ${val(19)}h ${val(20)}m</div>
+                                    <div><span class="text-gray-500 block">Alt Time:</span> ${val(21)}h ${val(22)}m</div>
+                                    <div><span class="text-gray-500 block">Altitude:</span> ${val(23, 'ft')}</div>
+                                    <div><span class="text-gray-500 block">Airspeed:</span> ${val(24, 'kts')}</div>
+                                    <div><span class="text-gray-500 block">Headwind:</span> ${val(25, 'kts')}</div>
+                                    <div><span class="text-gray-500 block">FOB:</span> ${val(26, 'lbs')}</div>
+                                    <div><span class="text-gray-500 block">Fuel Cons:</span> ${val(28, 'lbs/hr')}</div>
+                                    <div><span class="text-gray-500 block">Trip Fuel:</span> ${val(29, 'lbs')}</div>
+                                    <div><span class="text-gray-500 block">Alt Fuel:</span> ${val(30, 'lbs')}</div>
+                                    <div><span class="text-gray-500 block">Res Fuel:</span> ${val(31, 'lbs')}</div>
+                                    <div><span class="text-gray-500 block">Cont Fuel:</span> ${val(32, 'lbs')}</div>
+                                    <div><span class="text-gray-500 block">Taxi Fuel:</span> ${val(33, 'lbs')}</div>
+                                </div>
+
+                                <h5 class="text-amber-400 font-semibold mb-2 text-sm">Payload Layout (kg)</h5>
+                                <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs bg-gray-900/50 p-2 rounded">
+                                    <div><span class="text-gray-500 block">Baggage:</span> ${val(16)}</div>
+                                    <div><span class="text-gray-500 block">Ckpt Sto:</span> ${val(17)}</div>
+                                    <div><span class="text-gray-500 block">Cab Sto:</span> ${val(18)}</div>
+                                    <div><span class="text-gray-500 block">Galley:</span> ${val(35)}</div>
+                                    <div><span class="text-gray-500 block">Aft Lav:</span> ${val(49)}</div>
+                                    <div><span class="text-gray-500 block">Seat 1:</span> ${val(36)}</div>
+                                    <div><span class="text-gray-500 block">Seat 2:</span> ${val(37)}</div>
+                                    <div><span class="text-gray-500 block">Seat 3:</span> ${val(38)}</div>
+                                    <div><span class="text-gray-500 block">Seat 4:</span> ${val(39)}</div>
+                                    <div><span class="text-gray-500 block">Seat 5:</span> ${val(40)}</div>
+                                    <div><span class="text-gray-500 block">Seat 6:</span> ${val(41)}</div>
+                                    <div><span class="text-gray-500 block">Seat 7:</span> ${val(42)}</div>
+                                    <div><span class="text-gray-500 block">Seat 8:</span> ${val(43)}</div>
+                                    <div><span class="text-gray-500 block">Seat 9:</span> ${val(44)}</div>
+                                    <div><span class="text-gray-500 block">Seat 10:</span> ${val(45)}</div>
+                                    <div><span class="text-gray-500 block">Seat 11:</span> ${val(46)}</div>
+                                    <div><span class="text-gray-500 block">Seat 12:</span> ${val(47)}</div>
+                                    <div><span class="text-gray-500 block">Seat 13:</span> ${val(48)}</div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 `;
             });
+            
+            container.innerHTML = htmlContent;
         }
 
         window.toggleDetails = function(rowId) {
@@ -1935,12 +1965,18 @@
 
             const d = item.rowData;
             
-            // Konversi tanggal teks ke YYYY-MM-DD untuk input HTML type="date"
+            // Konversi tanggal untuk input HTML type="date" dengan mengatasi bug timezone
             function parseToInputDate(dateStr) {
-                if(!dateStr) return '';
+                if(!dateStr || dateStr === '-') return '';
                 const dateObj = new Date(dateStr);
-                if(isNaN(dateObj)) return '';
-                return dateObj.toISOString().split('T')[0];
+                if(isNaN(dateObj.getTime())) return '';
+                
+                // Mencegah .toISOString() menurunkan tanggal karena konversi ke UTC
+                const yyyy = dateObj.getFullYear();
+                const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const dd = String(dateObj.getDate()).padStart(2, '0');
+                
+                return `${yyyy}-${mm}-${dd}`;
             }
 
             // Map kolom yang sudah bergeser +1 kembali ke Inputs form utama
