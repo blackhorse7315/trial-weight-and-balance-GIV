@@ -239,7 +239,13 @@
             <!-- Sticky Top Navigation Bar (Glass Effect) -->
             <div class="sticky top-0 z-50 backdrop-blur-md bg-gray-900/80 -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-6 border-b border-gray-700/50 shadow-sm">
                 <div class="flex justify-between items-center w-full">
-                    <button id="view-history-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors shadow">History</button>
+                    <div class="flex gap-2">
+                        <button id="new-data-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors shadow flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                            New Data
+                        </button>
+                        <button id="view-history-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors shadow">History</button>
+                    </div>
                     <div class="flex gap-2">
                         <button id="app-sync-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors shadow">Sync</button>
                         <button id="app-logout-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors shadow">Logout</button>
@@ -1585,6 +1591,75 @@
         appLogoutBtn.addEventListener('click', () => handleLogout(false));
         adminLogoutBtn.addEventListener('click', () => handleLogout(false));
         saveExpiryBtn.addEventListener('click', handleSaveExpiry);
+
+        document.getElementById('new-data-btn')?.addEventListener('click', () => {
+            if(!confirm("Apakah Anda yakin ingin mengosongkan form untuk data baru?")) return;
+            
+            // Reset to default values
+            if(inputs.flightDate) inputs.flightDate.valueAsDate = new Date();
+            inputs.routeFrom.value = '';
+            inputs.routeTo.value = '';
+            inputs.picName.value = '';
+            inputs.copilotName.value = '';
+            inputs.engineerName.value = '';
+            inputs.cabinServiceName.value = '';
+            
+            // Reset aircraft limits and basic weights
+            inputs.rampWeight.value = 75000;
+            inputs.maxTakeoffWeight.value = 74600;
+            inputs.emptyWeight.value = 42765.80;
+            
+            // Reset crew standard weight
+            inputs.pilot.value = 90;
+            inputs.copilot.value = 90;
+            inputs.engineer.value = 90;
+            inputs.cabinService.value = 90;
+            
+            // Clear payloads
+            inputs.totalPob.value = '';
+            inputs.baggage.value = 90; // Default baggage
+            inputs.cockpitStorage.value = '';
+            inputs.cabinStorage.value = '';
+            
+            // Flight calc reset
+            inputs.tripTimeHours.value = '';
+            inputs.tripTimeMinutes.value = '';
+            inputs.tripToAlternateHours.value = '';
+            inputs.tripToAlternateMinutes.value = '';
+            inputs.altitude.value = '';
+            inputs.airspeed.value = 450;
+            inputs.headwind.value = '';
+            inputs.fuelOnBoard.value = '';
+
+            // Seat layout reset (Galley, AftLav, Seat1 defaults to standard catering values)
+            inputs.galley.value = 34;
+            inputs.seat1.value = 23;
+            inputs.seat2.value = '';
+            inputs.seat3.value = '';
+            inputs.seat4.value = '';
+            inputs.seat5.value = '';
+            inputs.seat6.value = '';
+            inputs.seat7.value = '';
+            inputs.seat8.value = '';
+            inputs.seat9.value = '';
+            inputs.seat10.value = '';
+            inputs.seat11.value = '';
+            inputs.seat12.value = '';
+            inputs.seat13.value = '';
+            inputs.aftLavatory.value = 23;
+
+            // Recalculate with empty values & hide PDF
+            calculateAll();
+            document.getElementById('downloadPdfBtn').classList.add('hidden');
+            
+            // Show feedback
+            const welcome = document.getElementById('welcome-message');
+            welcome.textContent = "Form telah dikosongkan untuk data penerbangan baru.";
+            welcome.classList.replace('text-amber-400', 'text-green-400');
+            setTimeout(() => { welcome.textContent = ""; }, 4000);
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
 
         async function fetchAndSyncDatabase(btnId) {
             const btn = document.getElementById(btnId);
