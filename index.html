@@ -1783,12 +1783,23 @@
                 return;
             }
 
-            // Urutkan berdasarkan tanggal & waktu paling baru (descending)
+            // Fungsi pembantu untuk mendapatkan tanggal dari 'Flight Date' (d[1]).
+            // Jika untuk data lama kosong, baru gunakan 'Timestamp' (d[0]) sebagai cadangan.
+            const getValidDate = (d) => {
+                const flightDateStr = d[1];
+                if (flightDateStr && flightDateStr !== '-') {
+                    const fd = new Date(flightDateStr);
+                    if (!isNaN(fd.getTime())) return fd;
+                }
+                return parseGBDate(d[0]); 
+            };
+
+            // Urutkan murni berdasarkan 'Flight Date' paling baru (descending)
             currentHistoryData.sort((a, b) => {
-                const dateA = parseGBDate(a.rowData[0]);
-                const dateB = parseGBDate(b.rowData[0]);
+                const dateA = getValidDate(a.rowData);
+                const dateB = getValidDate(b.rowData);
                 if (dateB.getTime() === dateA.getTime()) {
-                    return b.row - a.row; // Fallback ke row terbaru jika waktu sama
+                    return b.row - a.row; // Fallback ke baris terbaru jika waktu sama
                 }
                 return dateB.getTime() - dateA.getTime();
             });
@@ -1811,7 +1822,8 @@
                 const totalFuelRequired = d[34] || 0;
                 const elevatorTrim = d[58] || '-';
 
-                let dateObj = parseGBDate(ts);
+                // Mengambil objek tanggal yang tepat (berdasarkan Flight Date)
+                let dateObj = getValidDate(d);
                 
                 // Mencegah masalah timezone (UTC) dan mengubah ISO text menjadi format lokal yang mudah dibaca
                 let displayFlightDate = flightDateStr;
@@ -1852,7 +1864,6 @@
                                 <span class="mx-2 text-gray-500">→</span>
                                 <span class="font-bold text-amber-400 w-12 text-center">${routeTo}</span>
                             </div>
-                            <span class="text-xs text-gray-500 mt-2 sm:mt-0">${ts}</span>
                         </div>
 
                         <div class="mt-3 relative">
